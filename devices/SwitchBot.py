@@ -96,6 +96,7 @@ class SwitchBot():
             #conn_handle, addr_type, addr = data
             print('disconnect to peripheral complete...')
             self.connected = False
+            self.conn_handle = None
 
         elif event == _IRQ_GATTC_WRITE_DONE:
             # A gattc_write() has completed.
@@ -106,6 +107,8 @@ class SwitchBot():
             # when the status is successful, then read the status of last write operation
             #if value_handle == self.status_handle :
             self.ops_write = True
+
+            self.__ble.gattc_read(self.conn_handle, self.status_handle)
 
         elif event == _IRQ_GATTC_READ_RESULT:
             # A gattc_read() has completed.
@@ -212,15 +215,18 @@ class SwitchBot():
         self.__ble.gattc_write(self.conn_handle, self.value_handle, commands["status"], 1)
 
         # loop until the write is completed
-        while self.ops_write == False:
-            pass
+        #while self.ops_write == False:
+        #    pass
         self.ops_write == False # reset the flag
+        print ("write successful")
 
         # write successful, read back the status
-        self.__ble.gattc_read(self.conn_handle, self.status_handle)
+        #self.__ble.gattc_read(self.conn_handle, self.status_handle)
         while self.ops_read == False:
             pass
         self.ops_read == False # reset the flag
+        print ("Read successful")
+        #self.__ble.gap_disconnect(self.conn_handle)
 
         result = {}
         result["status"] =  self.bot_status
@@ -228,6 +234,31 @@ class SwitchBot():
         result["firmware"] = self.firmware
         return result
 
+    def handle_request(self, cmnd, action):
+        '''
+        This function is required because it handle all the 
+        incoming command and action
+
+        For SwitchBot, the commands 
+        press  
+            return : successful - {"status":0} 
+                     error - {"status": 9}
+        getstatus  
+            return : {"status":0, "battery":99, "firmware":49} 
+        '''
+        result = {}
+        gc.collect()
+        if cmnd =="press":
+            if self.press() == 0:
+                result["status"] = 0
+                return result
+            else:
+                result["status"] = 9
+                return result
+        elif cmnd == "getstatus":
+            status = self.getStatus()
+            
+            return status
 
 def test_switchbot():
     import json
@@ -240,4 +271,4 @@ def test_switchbot():
     switchbot.off()
     bt.active(False)
 
-test_switchbot()
+#test_switchbot()
