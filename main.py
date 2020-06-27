@@ -32,10 +32,10 @@ class mqtt2bleGateway():
         self.ble_handle = None
         
         # m5stick c hardware specific
-        self.activatebutton = Button(pin=Pin(BUTTON_A_PIN, mode=Pin.IN, pull=None), 
-            callback=self.button_a_callback)
-        self.resetbutton = Button(pin=Pin(BUTTON_B_PIN, mode=Pin.IN, pull=None), 
-            callback=self.button_b_callback)
+        self.activatebutton = Button(pin=Pin(BUTTON_A_PIN, mode=Pin.IN, pull=None),  
+            callback=self.button_a_callback, trigger=Pin.IRQ_FALLING)
+        self.resetbutton = Button(pin=Pin(BUTTON_B_PIN, mode=Pin.IN, pull=None),  
+            callback=self.button_b_callback, trigger=Pin.IRQ_FALLING)
 
         self.wlan_sta = network.WLAN(network.STA_IF)
         self.wlan_sta.active(True)
@@ -119,15 +119,16 @@ class mqtt2bleGateway():
         self.transport.start()
 
     def button_a_callback(self, pin):
-        print("Button A (%s) changed to: %r" % (pin, pin.value()))
+        #print("Button A (%s) changed to: %r" % (pin, pin.value()))
         if pin.value() == 0 :
             device = self.device_req_handler["studyrmfan"]
             # handle the request
+            
             status = device["instance"].handle_request("press", "on")
             print ("status")
     
     def button_b_callback(self, pin):
-        print("Button B (%s) changed to: %r" % (pin, pin.value()))
+        #print("Button B (%s) changed to: %r" % (pin, pin.value()))
         if pin.value() == 0 :
             reset()
             

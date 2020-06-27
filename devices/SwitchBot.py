@@ -54,6 +54,7 @@ commands = {
     'on'    : '\x57\x01\x01',
     'off'   : '\x57\x01\x02',
     'status': '\x57\x02\x00',
+    'none'  : '\x00\x00\x00',
 }
 
 class SwitchBot():
@@ -61,9 +62,6 @@ class SwitchBot():
         
         # the BLE must be turned on
         self.__ble = ble
-
-        
-        self.__ble.irq(self.bt_irq)
         
         self.addr_type = None
         self.addr = None
@@ -72,10 +70,11 @@ class SwitchBot():
         self.status_handle = 0x13
         self.last_status_str = None
         self.ops_read = False
-        self.ops_write = False
+        self.ops_write = commands["none"]
         self.ops_complete =False
         self.battery = 0
         self.firmware = 0
+        self.bot_status =0
 
         # connection paramaters        
         self.conn_handle = None
@@ -88,7 +87,7 @@ class SwitchBot():
         if event == _IRQ_PERIPHERAL_CONNECT:
             # A successful gap_connect().
             self.conn_handle, self.addr_type, self.addr = data
-            print('connect to peripheral complete')
+            print('connected to peripheral complete')
             self.connected=True
 
         elif event == _IRQ_PERIPHERAL_DISCONNECT:
@@ -104,21 +103,24 @@ class SwitchBot():
             # Note: Status will be zero on success, implementation-specific value otherwise.
             
             conn_handle, value_handle, status = data
+            #print ("_IRQ_GATTC_WRITE_DONE", self.ops_write)
             # when the status is successful, then read the status of last write operation
-            #if value_handle == self.status_handle :
-            self.ops_write = True
-
-            self.__ble.gattc_read(self.conn_handle, self.status_handle)
+            if self.ops_write == commands["status"] :
+                #print("Write Complete, reading the status handle")
+                self.__ble.gattc_read(self.conn_handle, self.status_handle)
 
         elif event == _IRQ_GATTC_READ_RESULT:
             # A gattc_read() has completed.
             conn_handle, value_handle, char_data = data
             
-            if value_handle == self.status_handle:
+            # to handle only read status 
+            if self.ops_write == commands["status"]:
+                self.ops_write = commands["none"]
                 self.last_status_str = byte2hex(char_data)
                 stat=char_data[0]
                 self.bot_status = int(stat)
-                
+                self.ops_read=True
+
                 if len(self.last_status_str) == 26:
                     #get the battery status
                     stat = char_data[1]
@@ -129,8 +131,6 @@ class SwitchBot():
                     stat = char_data[2]
                     fw = int(stat)
                     self.firmware = fw
-
-                    self.ops_read=True
 
             else:
                 print('_IRQ_GATTC_READ_RESULT', byte2hex(char_data))
@@ -154,19 +154,27 @@ class SwitchBot():
         return 0 if successful
         return 9 if connection failed after retry
         '''
-        print ("Connecting....")
+        print ("Connecting to BLE Device....")
+        self.__ble.irq(self.bt_irq)
+        
         if self.connected == True:
             return 0
         connect_retry = 0
         while self.connected == False:
-            if connect_retry < self.connect_retry:
-                self.__ble.gap_connect(1, self.addrbinary, self.connect_retry_timeout)
-                if connect_retry > 1 :
-                    print ("retry...", connect_retry)  
-            else:
-                break
-            connect_retry += 1
-            utime.sleep(self.connect_retry_timeout/1000)        
+            try :
+                if connect_retry < self.connect_retry:
+                    self.__ble.gap_connect(1, self.addrbinary, self.connect_retry_timeout)
+                    if connect_retry > 1 :
+                        print ("retry...", connect_retry)  
+                else:
+                    print("BLE connection to device FAILED!")
+                    break
+                connect_retry += 1
+                utime.sleep(self.connect_retry_timeout/1000)
+            except OSError as exc:
+                print ("OSError:", exc.args[0], connect_retry)
+                connect_retry += 1
+                
         return 9
     
     def disconnect(self):
@@ -212,21 +220,12 @@ class SwitchBot():
         self.connect()
         if self.connected == False:
             return 9
+        self.ops_write = commands["status"]
         self.__ble.gattc_write(self.conn_handle, self.value_handle, commands["status"], 1)
-
-        # loop until the write is completed
-        #while self.ops_write == False:
-        #    pass
-        self.ops_write == False # reset the flag
-        print ("write successful")
-
-        # write successful, read back the status
-        #self.__ble.gattc_read(self.conn_handle, self.status_handle)
-        while self.ops_read == False:
+        # wait for status
+        while self.ops_write == commands["status"]:
             pass
-        self.ops_read == False # reset the flag
-        print ("Read successful")
-        #self.__ble.gap_disconnect(self.conn_handle)
+        self.ops_write = commands["none"] # reset the flag
 
         result = {}
         result["status"] =  self.bot_status
@@ -251,14 +250,15 @@ class SwitchBot():
         if cmnd =="press":
             if self.press() == 0:
                 result["status"] = 0
-                return result
+                
             else:
                 result["status"] = 9
-                return result
+                
         elif cmnd == "getstatus":
-            status = self.getStatus()
-            
-            return status
+            result = self.getStatus()
+        if self.connected == True:
+            self.disconnect()
+        return result
 
 def test_switchbot():
     import json
