@@ -5,6 +5,8 @@ import json
 from umqtt.simple2 import MQTTClient
 import gc
 from devices.switchbot import SwitchBot
+from devices.mithermometer import MiThermometer
+
 from transport.mqtthandler import MQTTHandler
 
 #m5stickc specific
@@ -37,10 +39,12 @@ class mqtt2bleGateway():
         self.resetbutton = Button(pin=Pin(BUTTON_B_PIN, mode=Pin.IN, pull=None),  
             callback=self.button_b_callback, trigger=Pin.IRQ_FALLING)
 
+        '''
         self.wlan_sta = network.WLAN(network.STA_IF)
         self.wlan_sta.active(True)
         self.wifi_connected = False
-       
+        '''
+        
         # start the BLE
         self.startBLE()
 
@@ -51,9 +55,7 @@ class mqtt2bleGateway():
         with open('config.json') as f:
             self.config=json.load(f)
 
-        # start Wifi
-        while self.wlan_sta.isconnected() == False:
-            self.connect_wifi(self.config["wifi_ssid"], self.config["wifi_pw"])
+                
         # setup the transport layer
         if self.config["transport"] == "mqtt":
             mqttconfig = self.config["mqtt"]
@@ -66,28 +68,20 @@ class mqtt2bleGateway():
             #start an instance of the Switchbot   
             if device["devicetype"] == "switchbot":
                 device["instance"] = SwitchBot(self.ble_handle, device["mac"])
+            if device["devicetype"] == "xiaomitemp":
+                device["instance"] = MiThermometer(self.ble_handle, device["mac"])
+            
             # create a hashmap of devices
             devicename = device["devicename"] 
             self.device_req_handler[devicename]=device
-    
-    def connect_wifi(self, ssid, password):
-        
-        if self.wlan_sta.isconnected():
-            return None
-        print('Trying to connect to %s...' % ssid)
-        self.wlan_sta.connect(ssid, password)
-        for retry in range(100):
-            self.wifi_connected = self.wlan_sta.isconnected()
-            if self.wifi_connected:
-                break
-            time.sleep(0.1)
-            print('.', end='')
-        if self.wifi_connected:
-            print('\nConnected. Network config: ', self.wlan_sta.ifconfig())
-        else:
-            print('\nFailed. Not Connected to: ' + ssid)
+            print ("Added ", devicename)
 
+        device={}
+        for device in self.device_req_handler:
+            #devicename = device['devicename']
+            print(device)
 
+    # overwritten callback
     def mqtt_recv_cb(self, topic, msg, retain, dup):
         print("mqtt callback ", (topic, msg, retain, dup))
         print("free memory", gc.mem_free())
@@ -101,7 +95,7 @@ class mqtt2bleGateway():
         devicename = pathstr[1]
         action=pathstr[2]
         device = self.device_req_handler[devicename]
-        # handle the request
+        # handle the request and publish the status
         status = device["instance"].handle_request(action, msg)
         self.transport.publish(devicename,action, status )
     

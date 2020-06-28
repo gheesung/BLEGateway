@@ -1,4 +1,5 @@
-
+import network
+import time
 import json
 from umqtt.simple2 import MQTTClient
 
@@ -15,6 +16,17 @@ class MQTTHandler():
         self.receiver_callback = None
         self.client = None
 
+        # Wifi
+        self.wifi_ssid = config["wifi_ssid"]
+        self.wifi_password = config["wifi_pw"]
+        self.wlan_sta = network.WLAN(network.STA_IF)
+        self.wlan_sta.active(True)
+        self.wifi_connected = False
+
+        # Setup the wifi connection
+        self.setup_wifi()
+
+        # setup mqtt
         self.client = MQTTClient(self.clientid, server=self.server, port=self.port,
             user=self.userid, password=self.password)
         if callback == None :
@@ -30,7 +42,27 @@ class MQTTHandler():
         self.client.subscribe(topic)
         print ("mqtt setup listening to ", topic)
 
+    def setup_wifi(self):
+        if self.wlan_sta.isconnected():
+            return None
+        print('Trying to connect to %s...' % self.wifi_ssid)
+        self.wlan_sta.connect(self.wifi_ssid, self.wifi_password)
+        for retry in range(100):
+            self.wifi_connected = self.wlan_sta.isconnected()
+            if self.wifi_connected:
+                break
+            time.sleep(0.1)
+            print('.', end='')
+        if self.wifi_connected:
+            print('\nConnected. Network config: ', self.wlan_sta.ifconfig())
+        else:
+            print('\nFailed. Not Connected to: ' + self.wifi_ssid)
+            raise Exception ("Unable to connect to WIFI")
+
     def received_cb(self, topic, msg, retain, dup):
+        '''
+        Default mqtt callback
+        '''
         print((topic, msg, retain, dup))
         param={}
         param["topic"]=topic
