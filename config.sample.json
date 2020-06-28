@@ -1,8 +1,8 @@
 {
-    "wifi_ssid": "SSID",
-    "wifi_pw" : "PASSWORD",
     "transport" : "mqtt",
     "mqtt" : {
+        "wifi_ssid": "SSID",
+        "wifi_pw" : "PASSWORD",
         "mqtt_server" : "xx.xx.xx.xx",
         "mqtt_port" : 1883,
         "mqtt_clientid" : "blegateway_01",
