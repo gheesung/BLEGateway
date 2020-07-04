@@ -1,6 +1,8 @@
 import network
 import time
 import json
+import gc
+
 from umqtt.simple2 import MQTTClient
 
 
@@ -15,6 +17,7 @@ class MQTTHandler():
         self.topicprefix = config["topicprefix"]
         self.receiver_callback = None
         self.client = None
+        self.devicehandler = None
 
         # Wifi
         self.wifi_ssid = config["wifi_ssid"]
@@ -26,6 +29,8 @@ class MQTTHandler():
         # Setup the wifi connection
         self.setup_wifi()
 
+        self.visual_indicator = None
+        
         # setup mqtt
         self.client = MQTTClient(self.clientid, server=self.server, port=self.port,
             user=self.userid, password=self.password)
@@ -58,18 +63,33 @@ class MQTTHandler():
         else:
             print('\nFailed. Not Connected to: ' + self.wifi_ssid)
             raise Exception ("Unable to connect to WIFI")
-
+    
+    def set_visual_indicator(self, vi_cb):
+        self.visual_indicator = vi_cb
+        
     def received_cb(self, topic, msg, retain, dup):
         '''
         Default mqtt callback
         '''
-        print((topic, msg, retain, dup))
-        param={}
-        param["topic"]=topic
-        param["msg"]=msg
-        param["retain"]=retain
-        param["dup"]=dup
-    def publish(self, devicename, action, msg):
+        print("mqtt callback ", (topic, msg, retain, dup))
+        print("free memory", gc.mem_free())
+        self.visual_indicator(5)
+        msg=str(msg.decode("utf-8","ignore"))
+        topic=str(topic.decode("utf-8","ignore"))
+        pathstr=topic[len(self.topicprefix):]
+        pathstr = pathstr.split("/")
+        if len(pathstr) != 3 :
+            print ("Invalid topic path")
+            return
+        devicename = pathstr[1]
+        action=pathstr[2]
+        device = self.devicehandler[devicename]
+        # handle the request and publish the status
+        status = device["instance"].handle_request(action, msg)
+        self.publish_status(devicename,action, status )
+        self.visual_indicator(5)
+    
+    def publish_status(self, devicename, action, msg):
 
         pub_topic= self.topicprefix + "stat/" + devicename + "/" + action
         msg=json.dumps(msg)
@@ -77,6 +97,18 @@ class MQTTHandler():
         pub_topic=pub_topic.encode()
         print ("pub topic ", pub_topic, msg_enc)
         self.client.publish(pub_topic, msg_enc)
+    def publish(self, topic, msg):
+        msg_enc=msg.encode()
+        topic=topic.encode()
+        print ("pub topic ", topic, msg_enc)
+        self.client.publish(topic, msg_enc)
+
+    def set_device(self, devicehandler):
+        '''
+        Set the list of device handler
+        '''
+        self.devicehandler = devicehandler
+
     def start(self):
         blocking_method=True
         while True:
