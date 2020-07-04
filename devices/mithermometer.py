@@ -72,8 +72,13 @@ class MiThermometer:
         
         self.read_done = False
         self.__cache = None
-        self.mitempdata = {}
         
+        # init the dict
+        self.mitempdata = {}
+        self.mitempdata["fw"] = None
+        self.mitempdata["name"] = None
+        self.mitempdata["result"] = 9
+
         self.conn_handle = None
         self.connect_retry_timeout = 5000 # millisecond
         self.connect_retry = 5
@@ -159,6 +164,7 @@ class MiThermometer:
                         print ("retry...", connect_retry)  
                 else:
                     print("BLE connection to device FAILED!")
+                    self.mitempdata["result"] = 9
                     break
                 connect_retry += 1
                 utime.sleep(self.connect_retry_timeout/1000)        
@@ -173,21 +179,31 @@ class MiThermometer:
 
         Normally the device will disconnect itself. Call this want to explicity disconnect
         '''        
-        self.__ble.gap_disconnect(self.conn_handle)
+        if self.conn_handle != None:
+            self.__ble.gap_disconnect(self.conn_handle)
+
         if self.connected == False:
             return 0
         else:
             return 9
 
     def getSensorData(self):
+        '''
+        get the temperature and humdity data.
+        '''
         self.connect()
         if self.connected == False:
             return 9
         self.read_done = False
         _DATA_MODE_CHANGE = bytes([0x01,0x00])
         self.__ble.gattc_write(self.conn_handle, 0x10,_DATA_MODE_CHANGE,1)
+        
+        timeout = utime.ticks_add(utime.ticks_ms(), 5000)
         while self.read_done == False:
-            pass
+            # to prevent going into infinite loop
+            if utime.ticks_diff(timeout, utime.ticks_ms()) <= 0:
+                self.read_done = True
+                
         self.read_done = False
         #self.__ble.gattc_read(self.conn_handle, 58)
     
@@ -204,43 +220,73 @@ class MiThermometer:
         res[MI_HUMIDITY] = float(res[MI_HUMIDITY])
         self.mitempdata[MI_TEMPERATURE] = res[MI_TEMPERATURE] 
         self.mitempdata[MI_HUMIDITY] = res[MI_HUMIDITY] 
-
+        self.mitempdata["result"]=0
         #print (self.mitempdata)
         #return self.mitempdata
 
     def getName(self):
+        '''
+        get the device name.
+        The name is read only once
+        '''
+        # if there already a name, don't read anymore
+        if self.mitempdata["name"] != None:
+            return
+
         self.connect()
         if self.connected == False:
             return 9
         self.__ble.gattc_read(self.conn_handle, _HANDLE_READ_NAME)
+        timeout = utime.ticks_add(utime.ticks_ms(), 5000)
         while self.read_done == False:
-            pass
+            # to prevent going into infinite loop
+            if utime.ticks_diff(timeout, utime.ticks_ms()) <= 0:
+                self.read_done = True
         self.read_done = False
 
     def getFirmwareVersion(self):
+        '''
+        get the firmware version.
+        The firmware version is read only once
+        '''
+        # if there already a firmware version, don't read anymore
+        if self.mitempdata["fw"] != None:
+            return
+
         self.connect()
         if self.connected == False:
             return 9
         self.__ble.gattc_read(self.conn_handle, _HANDLE_READ_VERSION)
+        timeout = utime.ticks_add(utime.ticks_ms(), 5000)
         while self.read_done == False:
-            pass
+            # to prevent going into infinite loop
+            if utime.ticks_diff(timeout, utime.ticks_ms()) <= 0:
+                self.read_done = True
         self.read_done = False
 
     def getBatteryLevel(self):
+        '''
+        get the battery level.
+        '''
         self.connect()
         if self.connected == False:
             return 9
         self.__ble.gattc_read(self.conn_handle, _HANDLE_READ_BATTERY)   
+        timeout = utime.ticks_add(utime.ticks_ms(), 5000)
         while self.read_done == False:
-            pass
+            # to prevent going into infinite loop
+            if utime.ticks_diff(timeout, utime.ticks_ms()) <= 0:
+                self.read_done = True 
+        
         self.read_done = False
 
     def get_mitempdata(self):
         
-        self.getBatteryLevel()
+        if self.getBatteryLevel() == 9 :
+            return self.mitempdata 
         self.getFirmwareVersion()
         self.getName()
-        utime.sleep(1)
+        #utime.sleep(1)
         self.getSensorData()
         return self.mitempdata
 
@@ -254,14 +300,13 @@ class MiThermometer:
             return : successful - {"status":0} 
                      error - {"status": 9}
         getstatus  
-            return : {"status":0, "battery":99, "firmware":49} 
+            return : {"name": "MJ_HT_V1", "humidity": 73.6, "fw": "00.00.66", "result": 0, "battery": 60, "temperature": 31.1} 
         '''
         gc.collect()
 
         res = {'result':9}        
         if cmnd == "getstatus":
             res = self.get_mitempdata()
-            res["result"]=0
         if self.connected == True:
             self.disconnect()
         return res

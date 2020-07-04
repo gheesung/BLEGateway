@@ -1,5 +1,6 @@
 {
     "transport" : "mqtt",
+    "hardware" : "ttgo-t-cell",    
     "mqtt" : {
         "wifi_ssid": "SSID",
         "wifi_pw" : "PASSWORD",
