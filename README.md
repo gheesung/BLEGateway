@@ -16,6 +16,7 @@ This script will only work with Micropython unstable build from 2020-06-10 onwar
 ```json
 {
     "transport" : "mqtt",
+    "hardware" : "m5stack_core",
     "mqtt" : {
         "wifi_ssid": "SSID",
         "wifi_pw" : "PASSWORD",
@@ -42,8 +43,19 @@ This script will only work with Micropython unstable build from 2020-06-10 onwar
     ]
 }
 ```
+## Concepts
+This gateway consists of 3 major components:
+1. transport
+2. hardware
+3. device
 
-Only 1 transport handler is supported at 1 time.
+"transport" - This object take care of listening to external requests, activates the right device to get the information and returns the results to the requester. Only 1 transport handler is supported at 1 time and currently the only transport handler is MQTT.
+
+"hardware" - This object specify the micro controller whereby this module operates on. e.g. M5Stack Core. This object implements the avaialble hardwares like the ili9341 screen, buttons etc. 
+
+"device" - This object specifies the sensor(s) or actuator(s) to operate on. e.g. Xiaomi Temperature and Humidity sensor. The sensor(s) or actuator(s) can be internal or external to the hardware. It is specified as "device" so that it can be controlled externally by other systems.
+
+
 
 
 
@@ -51,3 +63,5 @@ Only 1 transport handler is supported at 1 time.
 # References
 https://github.com/fizista/micropython-umqtt.simple2
 https://github.com/RoButton/switchbotpy
+https://github.com/rdagger/micropython-ili9341
+
