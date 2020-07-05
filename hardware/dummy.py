@@ -1,4 +1,4 @@
-
+import utime
 class DummyHardware():
     '''
     Dummy Device class

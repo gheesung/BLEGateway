@@ -69,7 +69,7 @@ class mqtt2bleGateway():
         if self.config["hardware"] == "m5stack_core":
             from hardware.m5stackcore import M5Stack_core
             self.hardware = M5Stack_core()
-            self.hardware.set_callback(39, self.button_a_callback)
+            #self.hardware.set_callback(39, self.button_a_callback)
             print("loaded M5Stack_core")
         elif self.config["hardware"] == "ttgo-t-cell":
             from hardware.ttgotcell import TTGO_t_cell
