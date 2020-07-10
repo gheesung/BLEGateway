@@ -6,9 +6,16 @@ class DummyHardware():
     This class performs the default actions when the derived class did not implement
     the override method
     '''
-    def __init__(self) :
-        
+    def __init__(self, config) :
+        self.config = config
         self.tranport_handler = None
+        self.ble_handle = None
+
+        # ble - activate BLE if required
+        if self.config["enable_ble"] == True:
+            from hardware.bleradio import BLERadio
+            bleradio = BLERadio()
+            self.ble_handle = bleradio.activate_ble()        
     
     def set_transport_handler(self, transport_handler):
         self.tranport_handler = transport_handler
@@ -24,4 +31,6 @@ class DummyHardware():
         
     def show_setupcomplete(self):
         self.blink(10)
-        
+    
+    def display_result(self, text):
+        print("Display Result")

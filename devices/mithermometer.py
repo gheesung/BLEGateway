@@ -64,12 +64,13 @@ class MiThermometer:
     """"
     A class to read data from Mi thermometer sensors.
     """
-    def __init__(self, ble, mac):    
-        self.__ble = ble
-        #print("ble activated")
-        #self.__ble.config(rxbuf=256)
-        #self.__ble.irq(self.bt_irq)
-        
+    def __init__(self, hardware, mac):    
+
+        self.hardware = hardware
+
+        # the BLE must be turned on
+        self.__ble = self.hardware.get_ble_handle()
+
         self.read_done = False
         self.__cache = None
         
@@ -190,6 +191,7 @@ class MiThermometer:
     def getSensorData(self):
         '''
         get the temperature and humdity data.
+        return 9 if connection not connected or cannot read data
         '''
         self.connect()
         if self.connected == False:
@@ -204,8 +206,10 @@ class MiThermometer:
             if utime.ticks_diff(timeout, utime.ticks_ms()) <= 0:
                 self.read_done = True
                 
-        self.read_done = False
-        #self.__ble.gattc_read(self.conn_handle, 58)
+        if self.read_done == True:
+            self.read_done = False
+            return 0
+        return 9
     
     def _parse_data(self):
         """Parses the byte array returned by the sensor.
@@ -242,7 +246,10 @@ class MiThermometer:
             # to prevent going into infinite loop
             if utime.ticks_diff(timeout, utime.ticks_ms()) <= 0:
                 self.read_done = True
-        self.read_done = False
+        if self.read_done == True:
+            self.read_done = False
+            return 0
+        return 9
 
     def getFirmwareVersion(self):
         '''
@@ -262,7 +269,10 @@ class MiThermometer:
             # to prevent going into infinite loop
             if utime.ticks_diff(timeout, utime.ticks_ms()) <= 0:
                 self.read_done = True
-        self.read_done = False
+        if self.read_done == True:
+            self.read_done = False
+            return 0
+        return 9
 
     def getBatteryLevel(self):
         '''
@@ -278,16 +288,20 @@ class MiThermometer:
             if utime.ticks_diff(timeout, utime.ticks_ms()) <= 0:
                 self.read_done = True 
         
-        self.read_done = False
+        if self.read_done == True:
+            self.read_done = False
+            return 0
+        return 9
 
     def get_mitempdata(self):
-        
+        self.mitempdata["result"] =0
         if self.getBatteryLevel() == 9 :
-            return self.mitempdata 
+            self.mitempdata["result"] = 9 
         self.getFirmwareVersion()
         self.getName()
         #utime.sleep(1)
-        self.getSensorData()
+        if self.getSensorData() == 9:
+            self.mitempdata["result"] = 9
         return self.mitempdata
 
     def handle_request(self, cmnd, action):
@@ -309,7 +323,17 @@ class MiThermometer:
             res = self.get_mitempdata()
         if self.connected == True:
             self.disconnect()
+        print (res)
+        if res["result"] == 0:
+            self.display_result(res)
         return res
+
+    def display_result(self, res):
+        text = {}
+        text["line1"] = "Temp: " + str(res["temperature"])
+        text["line2"] = "Humi: " + str(res["humidity"])
+        text["line3"] = "Batt: " + str(res["battery"])
+        self.hardware.display_result(text)
 
 def test_mithermometer():
     bt = BLE()

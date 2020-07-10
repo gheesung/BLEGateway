@@ -58,10 +58,12 @@ commands = {
 }
 
 class SwitchBot():
-    def __init__(self, ble, mac):
+    def __init__(self, hardware, mac):
         
+        self.hardware = hardware
+
         # the BLE must be turned on
-        self.__ble = ble
+        self.__ble = self.hardware.get_ble_handle()
         
         self.addr_type = None
         self.addr = None

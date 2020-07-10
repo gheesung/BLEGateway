@@ -13,9 +13,11 @@ BUTTON_B_PIN = const(36)
 BUTTON_C_PIN = const(34)
 LED = const(21)
 
-class TTGO_t_cell(DummyHardware):
+class Hardware(DummyHardware):
     
     def __init__(self) :
+        super().__init__(config)
+
         # m5stick c hardware specific
         self.buttonA = Button(pin=Pin(BUTTON_A_PIN, mode=Pin.IN, pull=None),  
             callback=self.button_A_callback, trigger=Pin.IRQ_FALLING)
