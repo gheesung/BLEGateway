@@ -1,23 +1,10 @@
 import ubluetooth
 from ubluetooth import BLE, UUID
 from micropython import const
-import utime
+import utime, json
 import binascii
-import re
 import gc
 
-_HANDLE_READ_NAME = 0x03
-_HANDLE_READ_BATTERY = 0x18
-_HANDLE_READ_VERSION = 0x24
-_HANDLE_READ_SENSOR_DATA = 0x10
-
-MI_TEMPERATURE = "temperature"
-MI_HUMIDITY = "humidity"
-MI_BATTERY = "battery"
-
-_MITemp_UUID = ubluetooth.UUID('0000fe95-0000-1000-8000-00805f9b34fb')
-
-import utime
 _IRQ_CENTRAL_CONNECT = const(1)
 _IRQ_CENTRAL_DISCONNECT = const(2)
 _IRQ_GATTS_WRITE = const(3)
@@ -38,11 +25,10 @@ _IRQ_GATTC_WRITE_DONE = const(17)
 _IRQ_GATTC_NOTIFY = const(18)
 _IRQ_GATTC_INDICATE = const(19)
 
-import binascii
 
 def decode_mac(addr):
     """
-    Decode readable mac address from advertising addr
+    Decode readable mac address 
     """
     assert isinstance(addr, bytes) and len(addr) == 6, ValueError("mac address value error")
     return ":".join(['%02X' % byte for byte in addr])
@@ -56,42 +42,40 @@ def encode_mac(mac):
 
 def byte2hex(addr):
     """
-    Decode readable mac address from advertising addr
+    Convert byte to hex
     """
     return "".join(['%02X' % byte for byte in addr])
 
-class Device:
-    """"
-    A class to read data from Mi thermometer sensors.
-    """
-    def __init__(self, hardware, deviceconfig):    
-
+class Device():
+    def __init__(self, hardware, deviceconfig):
+        
         self.hardware = hardware
         self.devicename = deviceconfig["devicename"]
         
         # the BLE must be turned on
         self.__ble = self.hardware.get_ble_handle()
-
+        
+        self.addr_type = None
+        self.addr = None
+        self.adv_type = None
+        self.batt_handle = 8
+        self.alarm_handle = 11
+        self.button_handle = 14
+        self.last_status_str = None
+        self.ops_read = False
+        self.ops_complete =False
         self.read_done = False
-        self.__cache = None
-        
-        # init the dict
-        self.mitempdata = {}
-        self.mitempdata["fw"] = None
-        self.mitempdata["name"] = None
-        self.mitempdata["result"] = 9
-        self.mitempdata["humidity"] = 0
-        self.mitempdata["battery"] = 0
-        self.mitempdata["temperature"] = 0
+        self.battery = 0
 
+        # connection paramaters        
         self.conn_handle = None
-        self.connect_retry_timeout = 5000 # millisecond
-        self.connect_retry = 5
-        self.name = None
         self.connected = False
+        self.connect_retry = 5
+        self.connect_retry_timeout = 5000 # millisecond
         
+        self.deviceconfig = deviceconfig
         self.mac = deviceconfig["mac"]
-        self.addrbinary = encode_mac(self.mac)         
+        self.addrbinary = encode_mac(self.mac)
 
     def bt_irq(self, event, data):
         if event == _IRQ_PERIPHERAL_CONNECT:
@@ -119,19 +103,8 @@ class Device:
             # A gattc_read() has completed.
             conn_handle, value_handle, char_data = data
             #print('_IRQ_GATTC_READ_RESULT', value_handle, byte2hex(char_data))
-            if value_handle == _HANDLE_READ_BATTERY:
-                self.__cache=char_data
-                #print ("Battery Level ", int(char_data[0]))
-                self.mitempdata["battery"] = int(char_data[0])
-
-            if value_handle == _HANDLE_READ_NAME:
-                self.name = ''.join(chr(n) for n in char_data)
-                #print('Sensor Name ', self.name)
-                self.mitempdata["name"] = self.name
-            if value_handle == _HANDLE_READ_VERSION:
-                self._firmware_version = "".join(map(chr, char_data))
-                #print (self._firmware_version)
-                self.mitempdata["fw"] = self._firmware_version
+            if value_handle == self.batt_handle:
+                self.battery = int(char_data[0])
 
         elif event == _IRQ_GATTC_READ_DONE:
             # A gattc_read() has completed.
@@ -144,10 +117,7 @@ class Device:
             # Note: The value_handle will be zero on btstack (but present on NimBLE).
             # Note: Status will be zero on success, implementation-specific value otherwise.
             conn_handle, value_handle, notify_data = data
-            #print('_IRQ_GATTC_NOTIFY', value_handle, byte2hex(notify_data)) 
-            self.__cache=notify_data
-            self._parse_data()
-            self.read_done = True
+            print("Value Handle, data", value_handle, notify_data)
 
                 
         else:
@@ -171,7 +141,6 @@ class Device:
                         print ("retry...", connect_retry)  
                 else:
                     print("BLE connection to device FAILED!")
-                    self.mitempdata["result"] = 9
                     break
                 connect_retry += 1
                 utime.sleep(self.connect_retry_timeout/1000)        
@@ -179,7 +148,9 @@ class Device:
                 print ("OSError:", exc.args[0], connect_retry)
                 connect_retry += 1
             
-        return 9
+        if connect_retry >= self.connect_retry :
+            return 9
+        return 0
     def disconnect(self):
         '''
         disconnect from ble device. 
@@ -194,92 +165,18 @@ class Device:
         else:
             return 9
 
-    def getSensorData(self):
-        '''
-        get the temperature and humdity data.
-        return 9 if connection not connected or cannot read data
-        '''
-        self.connect()
-        if self.connected == False:
-            return 9
-        self.read_done = False
-        _DATA_MODE_CHANGE = bytes([0x01,0x00])
-        self.__ble.gattc_write(self.conn_handle, 0x10,_DATA_MODE_CHANGE,1)
-        
-        timeout = utime.ticks_add(utime.ticks_ms(), 5000)
-        while self.read_done == False:
-            # to prevent going into infinite loop
-            if utime.ticks_diff(timeout, utime.ticks_ms()) <= 0:
-                self.read_done = True
-                
-        if self.read_done == True:
-            self.read_done = False
+    def set_alarm(self, state):
+        if self.connect() == 0:
+
+            _DATA = bytes([0x00,0x00])
+            if state == 'on' :
+                print("alarm is on")
+                _DATA = bytes([0x01,0x00])
+            self.__ble.gattc_write(self.conn_handle, self.alarm_handle,_DATA,1)
             return 0
-        return 9
+        else:
+            return 9
     
-    def _parse_data(self):
-        """Parses the byte array returned by the sensor.
-        The sensor returns a string with 14 bytes. Example: "T=26.2 H=45.4\x00"
-        """
-        data = self.__cache
-        res = dict()
-        #print (byte2hex(data))
-        res[MI_TEMPERATURE], res[MI_HUMIDITY] = re.sub("[TH]=", '', data[:-1].decode()).split(' ')
-        
-        res[MI_TEMPERATURE] = float(res[MI_TEMPERATURE])
-        res[MI_HUMIDITY] = float(res[MI_HUMIDITY])
-        self.mitempdata[MI_TEMPERATURE] = res[MI_TEMPERATURE] 
-        self.mitempdata[MI_HUMIDITY] = res[MI_HUMIDITY] 
-        self.mitempdata["result"]=0
-        #print (self.mitempdata)
-        #return self.mitempdata
-
-    def getName(self):
-        '''
-        get the device name.
-        The name is read only once
-        '''
-        # if there already a name, don't read anymore
-        if self.mitempdata["name"] != None:
-            return
-
-        self.connect()
-        if self.connected == False:
-            return 9
-        self.__ble.gattc_read(self.conn_handle, _HANDLE_READ_NAME)
-        timeout = utime.ticks_add(utime.ticks_ms(), 5000)
-        while self.read_done == False:
-            # to prevent going into infinite loop
-            if utime.ticks_diff(timeout, utime.ticks_ms()) <= 0:
-                self.read_done = True
-        if self.read_done == True:
-            self.read_done = False
-            return 0
-        return 9
-
-    def getFirmwareVersion(self):
-        '''
-        get the firmware version.
-        The firmware version is read only once
-        '''
-        # if there already a firmware version, don't read anymore
-        if self.mitempdata["fw"] != None:
-            return
-
-        self.connect()
-        if self.connected == False:
-            return 9
-        self.__ble.gattc_read(self.conn_handle, _HANDLE_READ_VERSION)
-        timeout = utime.ticks_add(utime.ticks_ms(), 5000)
-        while self.read_done == False:
-            # to prevent going into infinite loop
-            if utime.ticks_diff(timeout, utime.ticks_ms()) <= 0:
-                self.read_done = True
-        if self.read_done == True:
-            self.read_done = False
-            return 0
-        return 9
-
     def getBatteryLevel(self):
         '''
         get the battery level.
@@ -287,7 +184,7 @@ class Device:
         self.connect()
         if self.connected == False:
             return 9
-        self.__ble.gattc_read(self.conn_handle, _HANDLE_READ_BATTERY)   
+        self.__ble.gattc_read(self.conn_handle, self.batt_handle)   
         timeout = utime.ticks_add(utime.ticks_ms(), 5000)
         while self.read_done == False:
             # to prevent going into infinite loop
@@ -298,17 +195,6 @@ class Device:
             self.read_done = False
             return 0
         return 9
-
-    def get_mitempdata(self):
-        self.mitempdata["result"] =0
-        if self.getBatteryLevel() == 9 :
-            self.mitempdata["result"] = 9 
-        self.getFirmwareVersion()
-        self.getName()
-        #utime.sleep(1)
-        if self.getSensorData() == 9:
-            self.mitempdata["result"] = 9
-        return self.mitempdata
 
     def handle_request(self, cmnd, action):
         '''
@@ -324,35 +210,64 @@ class Device:
         '''
         gc.collect()
 
-        res = {'result':9}        
-        if cmnd == "getstatus":
-            res = self.get_mitempdata()
+        res = {}
+        res["result"] = 9
+        res["command"] = cmnd
+        #print (cmnd, action)
+        if cmnd == "alarm":
+            if action == "on":
+                self.set_alarm("on")
+            else:
+                self.set_alarm("off")
+            res["result"] = 0 
+            res["alarm"] = action
+        elif cmnd == "getstatus":
+            if self.getBatteryLevel() == 0:
+                res["result"] = 0
+                res["battery"] = self.battery
+            else:
+                res["result"] = 9
+                res["battery"] = self.battery
         if self.connected == True:
             self.disconnect()
         print (res)
         if res["result"] == 0:
             self.display_result(res)
         return res
-
+    
     def display_result(self, res):
         text = {}
-        text["line1"] = "Temp: " + str(res["temperature"])
-        text["line2"] = "Humi: " + str(res["humidity"])
-        text["line3"] = "Batt: " + str(res["battery"])
+        text["line1"] = self.deviceconfig["friendlyname"]
+        text["line2"] = "Action: " + res["command"]
+        if res["command"] == "alarm":
+            text["line3"] = "Status: " + res["alarm"]
+        elif res["command"] == "getstatus":
+            text["line3"] = "Batt: " + str(res["battery"])
         self.hardware.display_result(text)
 
-def test_mithermometer():
-    bt = BLE()
-    bt.active(True)
-    mithermometer = MiThermometer(bt,"4C:65:A8:DF:E9:37")
-    print(mithermometer.get_mitempdata())
-    
+def test_tracker():
+    with open('../config.json') as f:
+        config=json.load(f)
 
+    from hardware.m5stackfire import Hardware
 
-#test_mithermometer()    
-#mithermometer.connect()
-#mithermometer.getFirmwareVersion()
-#mithermometer.getName()
-#mithermometer.getSensorData()
-#mithermometer.getBatteryLevel()
+    hardware = {}
+    hardware = config["hardware"]
+    hardware_config ={}
+    hardware_config = config[hardware]
+    fire = Hardware(hardware_config)
+            
+    # setup the devices
+    devices = config["devices"]
+    device_req_handler = None
+    for device in devices:
+        print (device["devicename"])
+        if device["devicetype"] == "bletracker":
+            device_req_handler = Device(fire, device)
 
+    device_req_handler.connect()
+    device_req_handler.alarm('off')
+    device_req_handler.getBatteryLevel()
+    print("battery:", device_req_handler.battery)
+
+#test_tracker()

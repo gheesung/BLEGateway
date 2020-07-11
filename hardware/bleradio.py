@@ -8,6 +8,8 @@ class BLERadio():
 
     def activate_ble(self):
         if self.ble_activated == False:
+            self.ble_handle.active(False)
+            print("Starting ble...")
             self.ble_handle.active(True)
             self.ble_activated = True
             self.ble_handle.config(rxbuf=256)

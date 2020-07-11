@@ -82,7 +82,7 @@ class Hardware(DummyHardware):
         '''
         Clear the dashboard area
         '''
-        self.display.fill_rectangle(70, 80, 150, 100, color565(0,0,0))
+        self.display.fill_rectangle(70, 80, 200, 100, color565(0,0,0))
 
     def setup_screen(self):
         self.screen_power = Pin(m5stack.TFT_LED_PIN, Pin.OUT)

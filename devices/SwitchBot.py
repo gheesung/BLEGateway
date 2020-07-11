@@ -57,11 +57,12 @@ commands = {
     'none'  : '\x00\x00\x00',
 }
 
-class SwitchBot():
-    def __init__(self, hardware, mac):
+class Device():
+    def __init__(self, hardware, deviceconfig):
         
         self.hardware = hardware
-
+        self.devicename = deviceconfig["devicename"]
+        
         # the BLE must be turned on
         self.__ble = self.hardware.get_ble_handle()
         
@@ -83,7 +84,9 @@ class SwitchBot():
         self.connected = False
         self.connect_retry = 5
         self.connect_retry_timeout = 5000 # millisecond
-        self.addrbinary = encode_mac(mac)
+        
+        self.mac = deviceconfig["mac"]
+        self.addrbinary = encode_mac(self.mac)   
     
     def bt_irq(self, event, data):
         if event == _IRQ_PERIPHERAL_CONNECT:

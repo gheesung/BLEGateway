@@ -5,7 +5,7 @@ import json
 #from umqtt.simple2 import MQTTClient
 import gc
 
-from transport.mqtthandler import MQTTHandler
+
 
 from machine import Pin, Timer, reset
 from hardware.button import Button
@@ -23,7 +23,7 @@ class mqtt2bleGateway():
         self.config = None
         self.client = None
         self.config = None
-        self.transport = None # for now only mqtt
+        self.protocol_handler = None 
         self.devices = {}
         self.ble_activated = False
         self.ble_handle = None
@@ -56,44 +56,49 @@ class mqtt2bleGateway():
         # setup the transport layeran
         if self.config["transport"] == "mqtt":
             mqttconfig = self.config["mqtt"]
-            #self.transport = MQTTHandler(mqttconfig,self.mqtt_recv_cb)
-            self.transport = MQTTHandler(mqttconfig)
-        
+            from transport.mqtthandler import MQTTHandler
+            self.protocol_handler = MQTTHandler(self.hardware, mqttconfig)
+        elif self.config["transport"] == "blescanner":
+            from transport.blescanner import BLEScanner
+            blescanner_config = self.config["blescanner"]
+            self.protocol_handler = BLEScanner(self.hardware, blescanner_config)
         # setup the devices
         devices = self.config["devices"]
         for device in devices:
             #start an instance of the Switchbot   
             if device["devicetype"] == "switchbot":
-                from devices.switchbot import SwitchBot
-                device["instance"] = SwitchBot(self.hardware, device["mac"])
+                from devices.switchbot import Device
 
             if device["devicetype"] == "xiaomitemp":
-                from devices.mithermometer import MiThermometer
-                device["instance"] = MiThermometer(self.hardware, device["mac"])
-            
+                from devices.mithermometer import Device
+
+            if device["devicetype"] == "bletracker":
+                from devices.tracker import Device
+            if device["devicetype"] == "ble_advdec":
+                from devices.ble_advdec import Device
+
+            device["instance"] = Device(self.hardware, device)
             # create a hashmap of devices
             devicename = device["devicename"]
             self.device_req_handler[devicename]=device
 
         # pass the device handler to the transport handler
-        self.transport.devicehandler = self.device_req_handler
-
-
+        self.protocol_handler.devicehandler = self.device_req_handler
 
         # pass the transport and device handler to the hardware
-        self.hardware.set_transport_handler(self.transport)
+        self.hardware.set_transport_handler(self.protocol_handler)
         
-        device={}
-        for device in self.device_req_handler:
+        for device in self.device_req_handler.items():
             #devicename = device['devicename']
             print("Added :", device)
         
         # hardware device to indicate visually (if possible) when the setup is completed.
-        self.transport.set_visual_indicator(self.hardware.blink)
+        #self.protocol_handler.set_visual_indicator(self.hardware.blink)
         self.hardware.show_setupcomplete()
 
+
     def start(self) :
-        self.transport.start()
+        self.protocol_handler.start()
 
 
             

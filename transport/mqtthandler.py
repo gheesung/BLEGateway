@@ -4,20 +4,21 @@ import json
 import gc
 
 from umqtt.simple2 import MQTTClient
+from transport.protocol_handler import ProtocolHandler
+
+class MQTTHandler(ProtocolHandler):
+    def __init__(self, hardware, config):
+        super().__init__(hardware, config)
 
 
-class MQTTHandler():
-    def __init__(self, config, callback=None):
-        self.config = config
         self.server = config["mqtt_server"]
         self.port = config["mqtt_port"]
         self.clientid = config["mqtt_clientid"]
         self.userid = config["userid"]
         self.password = config["password"]
         self.topicprefix = config["topicprefix"]
-        self.receiver_callback = None
         self.client = None
-        self.devicehandler = None
+        
 
         # Wifi
         self.wifi_ssid = config["wifi_ssid"]
@@ -30,19 +31,16 @@ class MQTTHandler():
         self.setup_wifi()
 
         self.visual_indicator = None
-        
+        self.devicehandler = None       # the handle to all the devices
+
         # setup mqtt
         self.client = MQTTClient(self.clientid, server=self.server, port=self.port,
             user=self.userid, password=self.password)
-        if callback == None :
-            #set to default callback
-            self.client.set_callback(self.received_cb)
-        else:
-            self.client.set_callback(callback)
+        #set to mqtt callback
+        self.client.set_callback(self.received_cb)
         self.client.connect()
 
         topic = self.topicprefix  + 'cmnd/+/+'
-        
         topic = topic.encode()
         self.client.subscribe(topic)
         print ("mqtt setup listening to ", topic)
@@ -64,8 +62,8 @@ class MQTTHandler():
             print('\nFailed. Not Connected to: ' + self.wifi_ssid)
             raise Exception ("Unable to connect to WIFI")
     
-    def set_visual_indicator(self, vi_cb):
-        self.visual_indicator = vi_cb
+    #def set_visual_indicator(self, vi_cb):
+    #    self.visual_indicator = vi_cb
         
     def received_cb(self, topic, msg, retain, dup):
         '''
@@ -73,7 +71,13 @@ class MQTTHandler():
         '''
         print("mqtt callback ", (topic, msg, retain, dup))
         print("free memory", gc.mem_free())
-        self.visual_indicator(5)
+
+        # blink to indicate incoming message
+        self.hardware.blink(5)
+
+        # process incoming message
+        # for mqtt, topic/devicename/acton will determine which device to 
+        # handle the request
         msg=str(msg.decode("utf-8","ignore"))
         topic=str(topic.decode("utf-8","ignore"))
         pathstr=topic[len(self.topicprefix):]
@@ -84,10 +88,13 @@ class MQTTHandler():
         devicename = pathstr[1]
         action=pathstr[2]
         device = self.devicehandler[devicename]
-        # handle the request and publish the status
+        
+        # cann the device to handle the request and publish the status
         status = device["instance"].handle_request(action, msg)
         self.publish_status(devicename,action, status )
-        self.visual_indicator(5)
+        
+        # blink to indicate status has been publish
+        self.hardware.blink(5)
     
     def publish_status(self, devicename, action, msg):
 
