@@ -160,20 +160,21 @@ class BLEScanner(ProtocolHandler):
         # process incoming message
         # pass the request to the BLE Adv Handler
         # handle the request
-        device = self.devicehandler["bleadv_handler"]
-        print ("device Name", device["devicename"])
+        devicehandler = self.devicehandler["bleadv_handler"]
+
+        #lookup the device
+        device = self.bledevices[mac]
+        print ("device Name", device["friendlyname"])
 
         data = {}
         data["mac"] = mac
         data["payload"] = adv_data
         data["rssi"] = rssi
-        data["devicename"] = device["devicename"]
+        data["devicename"] = device["device_id"]
         data["friendlyname"] = device["friendlyname"]
-        data["deviceprotocol"] = device["deviceprotocol"]
-        data["devicetype"] = device["devicetype"]
 
-        deviceinst = device["instance"]
-        # cann the device to handle the request and publish the status
+        deviceinst = devicehandler["instance"]
+        # send to the device to handle the request and publish the status
         status = deviceinst.handle_request('decode_ad_data', data)
     
         # blink to indicate status has been publish

@@ -30,16 +30,12 @@ class Device():
 
         if cmnd == "decode_ad_data":
             print(data)
-        #if res["result"] == 0:
-        #    self.display_result(res)
+            self.display_result(data)
         return 
     
-    def display_result(self, res):
+    def display_result(self, data):
         text = {}
-        text["line1"] = self.deviceconfig["friendlyname"]
-        text["line2"] = "Action: " + res["command"]
-        if res["command"] == "alarm":
-            text["line3"] = "Status: " + res["alarm"]
-        elif res["command"] == "getstatus":
-            text["line3"] = "Batt: " + str(res["battery"])
+        text["line1"] = data["friendlyname"]
+        text["line2"] = "rssi: " + str(data["rssi"])
+        text["line3"] = ""
         self.hardware.display_result(text)
