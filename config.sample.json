@@ -1,28 +1,85 @@
 {
-    "transport" : "mqtt",
-    "hardware" : "ttgo-t-cell",    
+    "transport" : "blescanner",
+    "hardware" : "m5stack_fire",
+    "m5stack_core": {
+        "enable_ble" : true,
+        "enable_wifi" : true,
+        "wifi_ssid": "SSID",
+        "wifi_pw" : "PASSWORD"
+    },
+    "m5stack_fire": {
+        "enable_ble" : true,
+        "enable_wifi" : true,
+        "wifi_ssid": "SSID",
+        "wifi_pw" : "PASSWORD"
+    },    
     "mqtt" : {
         "wifi_ssid": "SSID",
         "wifi_pw" : "PASSWORD",
-        "mqtt_server" : "xx.xx.xx.xx",
+        "mqtt_server" : "192.168.1.99",
         "mqtt_port" : 1883,
-        "mqtt_clientid" : "blegateway_01",
-        "userid": "",
-        "password":"",
+        "mqtt_clientid" : "blestudyrm_01",
+        "userid": "MQTTID",
+        "password":"MQTTPASSWORD",
         "topicprefix": "bs/studyrm/ble/"
+    },
+    "blescanner":{
+        "scan_interval" : 1000,
+        "scan_window" : 500,
+        "ble_devices" : [
+            {
+                "device_id" : "white",
+                "friendlyname" : "White Tracker",
+                "mac" :"FF:FF:38:5C:15:AE"
+            },
+            {
+                "device_id" : "black",
+                "friendlyname" : "Black Tracker",
+                "mac" :"FF:FF:00:02:85:B1"
+            },
+            {
+                "device_id" : "pink",
+                "friendlyname" : "Pink Tracker",
+                "mac" :"FF:FF:38:5C:29:44"
+            }            
+        ]
     },
     "devices" : [
         {
             "devicename": "studyrmfan",
+            "friendlyname" : "Fan",
             "devicetype": "switchbot",
             "deviceprotocol" : "ble",
             "mac" : "C6:23:6C:64:20:C1"
         },
         {
-            "devicename": "studyrm02",
+            "devicename": "waterheater",
+            "friendlyname" : "Water Heater",
             "devicetype": "switchbot",
             "deviceprotocol" : "ble",
             "mac" : "F8:AB:2C:3E:DE:9B"
+        },
+        {
+            "devicename": "studyrmtemp",
+            "friendlyname" : "Study Tmp/Hum",
+            "devicetype": "xiaomitemp",
+            "deviceprotocol" : "ble",
+            "mac" : "4C:65:A8:DF:E9:37"
+        },
+        {
+            "devicename": "whitetracker",
+            "friendlyname" : "White Tracker",
+            "devicetype": "bletracker",
+            "deviceprotocol" : "ble",
+            "mac" : "FF:FF:38:5C:15:AE"
+        },
+        {
+            "devicename": "bleadv_handler",
+            "friendlyname" : "BLE Adv Handler",
+            "devicetype": "ble_advdec",
+            "deviceprotocol" : "mqtt",
+            "mac" : ""
         }
+
     ]
 }
