@@ -15,8 +15,7 @@ LED = const(21)
 
 class Hardware(DummyHardware):
     
-    def __init__(self) :
-        super().__init__(config)
+    def __init__(self, config) :
 
         # m5stick c hardware specific
         self.buttonA = Button(pin=Pin(BUTTON_A_PIN, mode=Pin.IN, pull=None),  
@@ -29,6 +28,7 @@ class Hardware(DummyHardware):
         self.led = Pin(LED, mode=Pin.OUT)
         
         self.tranport_handler = None
+        super().__init__(config)
     
     def set_pin_callback(self, button, cb):
         '''

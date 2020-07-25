@@ -2,9 +2,15 @@ import network
 import time
 import json
 import gc
+import uasyncio as asyncio
 
-from umqtt.simple2 import MQTTClient
+#from umqtt.simple2 import MQTTClient
+from umqtt.mqtt_as import MQTTClient
 from transport.protocol_handler import ProtocolHandler
+
+# Default "do little" coro for optional user replacement
+async def eliza(*_):  # e.g. via set_wifi_handler(coro): see test program
+    await asyncio.sleep_ms(20)
 
 class MQTTHandler(ProtocolHandler):
     def __init__(self, hardware, config):
@@ -34,16 +40,46 @@ class MQTTHandler(ProtocolHandler):
         self.devicehandler = None       # the handle to all the devices
 
         # setup mqtt
-        self.client = MQTTClient(self.clientid, server=self.server, port=self.port,
-            user=self.userid, password=self.password)
+        #self.client = MQTTClient(self.clientid, server=self.server, port=self.port,
+        #    user=self.userid, password=self.password)
+
+        config_mqtt = {
+            'client_id':     self.clientid,
+            'server':        self.server,
+            'port':          0,
+            'user':          self.userid,
+            'password':      self.password,
+            'keepalive':     60,
+            'ping_interval': 0,
+            'ssl':           False,
+            'ssl_params':    {},
+            'response_time': 10,
+            'clean_init':    True,
+            'clean':         True,
+            'max_repubs':    4,
+            'will':          None,
+            'subs_cb':       self.received_cb,
+            'wifi_coro':     eliza,
+            'connect_coro':  self.conn_han,
+            'ssid':          self.wifi_ssid,
+            'wifi_pw':       self.wifi_password,
+        }
+
+
+        self.client = MQTTClient(config_mqtt)
+
         #set to mqtt callback
-        self.client.set_callback(self.received_cb)
-        self.client.connect()
+        #self.client.set_callback(self.received_cb)
+        #self.client.connect()
 
         topic = self.topicprefix  + 'cmnd/+/+'
         topic = topic.encode()
-        self.client.subscribe(topic)
+        self.topic = topic 
+        #self.client.subscribe(topic)
         print ("mqtt setup listening to ", topic)
+    
+    async def conn_han(self, client):
+        await self.client.subscribe(self.topic, 1)
 
     def setup_wifi(self):
         if self.wlan_sta.isconnected():
@@ -65,11 +101,12 @@ class MQTTHandler(ProtocolHandler):
     #def set_visual_indicator(self, vi_cb):
     #    self.visual_indicator = vi_cb
         
-    def received_cb(self, topic, msg, retain, dup):
+    #def received_cb(self, topic, msg, retain, dup):
+    def received_cb(self, topic, msg, retain):
         '''
         Default mqtt callback
         '''
-        print("mqtt callback ", (topic, msg, retain, dup))
+        print("mqtt callback ", (topic, msg))
         print("free memory", gc.mem_free())
 
         # blink to indicate incoming message
@@ -117,6 +154,12 @@ class MQTTHandler(ProtocolHandler):
         self.devicehandler = devicehandler
 
     def start(self):
+        loop = asyncio.get_event_loop()
+        try:
+            loop.run_until_complete(main_loop(self.client))
+        finally:
+            self.client.close()  # Prevent LmacRxBlk:1 errors        
+        '''
         blocking_method=True
         while True:
             if blocking_method:
@@ -128,4 +171,9 @@ class MQTTHandler(ProtocolHandler):
                 # Then need to sleep to avoid 100% CPU usage (in a real
                 # app other useful actions would be performed instead)
                 time.sleep(1)
+        '''
 
+async def main_loop(client):
+    await client.connect()
+    while True:
+        await asyncio.sleep(5)

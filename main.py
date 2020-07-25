@@ -49,7 +49,7 @@ class mqtt2bleGateway():
             from hardware.ttgotcell import Hardware
         elif hardware == "m5stack_fire":
             from hardware.m5stackfire import Hardware
-
+        print ("Hardware :", hardware)
         hardware_config = self.config[hardware]
         self.hardware = Hardware(hardware_config)
 

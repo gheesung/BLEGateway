@@ -97,7 +97,7 @@ class Device:
         if event == _IRQ_PERIPHERAL_CONNECT:
             # A successful gap_connect().
             self.conn_handle, self.addr_type, self.addr = data
-            print('connected to peripheral complete')
+            print('connected to peripheral complete mitherm', self.conn_handle)
             self.connected=True
        
 
