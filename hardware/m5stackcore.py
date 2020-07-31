@@ -1,6 +1,7 @@
 from micropython import const
 from machine import Pin, Timer
-from hardware.button import Button
+#from hardware.button import Button
+from hardware.aswitch import Pushbutton as Button
 from hardware.dummy import DummyHardware
 
 #screen components
@@ -23,14 +24,24 @@ class Hardware(DummyHardware):
     
     def __init__(self, config) :
 
-
+        pin_a = Pin(BUTTON_A_PIN, mode=Pin.IN, pull=None)
+        pin_b = Pin(BUTTON_B_PIN, mode=Pin.IN, pull=None)
+        pin_c = Pin(BUTTON_C_PIN, mode=Pin.IN, pull=None)
+        
+        self.buttonA = Button(pin=pin_a)
+        self.buttonB = Button(pin=pin_b)
+        self.buttonC = Button(pin=pin_c)
+        self.buttonA.press_func(self.button_A_callback, (pin_a,))  # Note how function and args are passed
+        self.buttonB.press_func(self.button_B_callback, (pin_b,))  # Note how function and args are passed
+        self.buttonC.press_func(self.button_C_callback, (pin_c,))  # Note how function and args are passed
+ 
         # buttons
-        self.buttonA = Button(pin=Pin(BUTTON_A_PIN, mode=Pin.IN, pull=None),  
-            callback=self.button_A_callback, trigger=Pin.IRQ_FALLING)
-        self.buttonB = Button(pin=Pin(BUTTON_B_PIN, mode=Pin.IN, pull=None),  
-            callback=self.button_B_callback, trigger=Pin.IRQ_FALLING)
-        self.buttonC = Button(pin=Pin(BUTTON_C_PIN, mode=Pin.IN, pull=None),  
-            callback=self.button_C_callback, trigger=Pin.IRQ_FALLING)
+        #self.buttonA = Button(pin=Pin(BUTTON_A_PIN, mode=Pin.IN, pull=None),  
+        #    callback=self.button_A_callback, trigger=Pin.IRQ_FALLING)
+        #self.buttonB = Button(pin=Pin(BUTTON_B_PIN, mode=Pin.IN, pull=None),  
+        #    callback=self.button_B_callback, trigger=Pin.IRQ_FALLING)
+        #self.buttonC = Button(pin=Pin(BUTTON_C_PIN, mode=Pin.IN, pull=None),  
+        #    callback=self.button_C_callback, trigger=Pin.IRQ_FALLING)
         
         # display
         self.display = None
@@ -53,30 +64,31 @@ class Hardware(DummyHardware):
                 callback=cb, trigger=Pin.IRQ_FALLING)
 
     def button_A_callback(self, pin):
-        #print("Button (%s) changed to: %r" % (pin, pin.value()))
+        print("Button (%s) changed to: %r" % (pin, pin.value()))
         if pin.value() == 0 :
             
             #device = self.device_req_handler["studyrmfan"]
             # handle the request
             topic = self.tranport_handler.topicprefix + 'cmnd/studyrmfan/press'
-            self.tranport_handler.publish(topic, 'on')
+            await self.tranport_handler.publish(topic, 'on')
+       
             
     def button_B_callback(self, pin):
-        #print("Button (%s) changed to: %r" % (pin, pin.value()))
+        print("Button (%s) changed to: %r" % (pin, pin.value()))
         if pin.value() == 0 :
             
             # handle the request
             topic = self.tranport_handler.topicprefix + 'cmnd/studyrmtemp/getstatus'
-            self.tranport_handler.publish(topic, 'on')
+            await self.tranport_handler.publish(topic, 'on')
 
     def button_C_callback(self, pin):
-        #print("Button (%s) changed to: %r" % (pin, pin.value()))
+        print("Button (%s) changed to: %r" % (pin, pin.value()))
         if pin.value() == 0 :
             
             #device = self.device_req_handler["waterheater"]
             # handle the request
             topic = self.tranport_handler.topicprefix + 'cmnd/waterheater/press'
-            self.tranport_handler.publish(topic, 'on')
+            await self.tranport_handler.publish(topic, 'on')
     
     def clear_dashboard(self):
         '''

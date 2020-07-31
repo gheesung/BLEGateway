@@ -18,7 +18,7 @@ class DummyHardware():
             bleradio = BLERadio()
             self.ble_handle = bleradio.activate_ble()
     
-    def get_blehandle(self):
+    def get_ble_handle(self):
         return self.ble_handle
     
     def set_transport_handler(self, transport_handler):

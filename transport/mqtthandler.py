@@ -3,8 +3,6 @@ import time
 import json
 import gc
 import uasyncio as asyncio
-
-#from umqtt.simple2 import MQTTClient
 from umqtt.mqtt_as import MQTTClient
 from transport.protocol_handler import ProtocolHandler
 
@@ -24,7 +22,6 @@ class MQTTHandler(ProtocolHandler):
         self.password = config["password"]
         self.topicprefix = config["topicprefix"]
         self.client = None
-        
 
         # Wifi
         self.wifi_ssid = config["wifi_ssid"]
@@ -100,7 +97,8 @@ class MQTTHandler(ProtocolHandler):
     
     #def set_visual_indicator(self, vi_cb):
     #    self.visual_indicator = vi_cb
-        
+
+
     #def received_cb(self, topic, msg, retain, dup):
     def received_cb(self, topic, msg, retain):
         '''
@@ -126,26 +124,38 @@ class MQTTHandler(ProtocolHandler):
         action=pathstr[2]
         device = self.devicehandler[devicename]
         
-        # cann the device to handle the request and publish the status
+        # call the device to handle the request 
         status = device["instance"].handle_request(action, msg)
-        self.publish_status(devicename,action, status )
-        
+        status = json.dumps(status)
+        print ("Status of request", action, status)
+            
+        #publish the status to the status queue
+        status_topic= self.topicprefix + "stat/" + devicename + "/" + action
+        self.status_result = {
+            "topic": status_topic.encode(),
+            "msg" : status.encode()
+            }
+        self.loop.create_task(self.publish_status(self.status_result))
+
         # blink to indicate status has been publish
         self.hardware.blink(5)
-    
-    def publish_status(self, devicename, action, msg):
+        
+    async def publish_status(self, status_message):  
+        msg_enc=status_message["msg"]
+        topic=status_message["topic"]
+        await self.client.publish(topic, msg_enc)
 
-        pub_topic= self.topicprefix + "stat/" + devicename + "/" + action
-        msg=json.dumps(msg)
-        msg_enc=msg.encode()
-        pub_topic=pub_topic.encode()
-        print ("pub topic ", pub_topic, msg_enc)
-        self.client.publish(pub_topic, msg_enc)
+
     def publish(self, topic, msg):
         msg_enc=msg.encode()
         topic=topic.encode()
-        print ("pub topic ", topic, msg_enc)
-        self.client.publish(topic, msg_enc)
+        print ("pub command topic ", topic, msg_enc)
+        result = {
+            "topic": topic,
+            "msg" : msg
+            }
+        self.loop.create_task(self.publish_status(result))
+
 
     def set_device(self, devicehandler):
         '''
@@ -154,26 +164,15 @@ class MQTTHandler(ProtocolHandler):
         self.devicehandler = devicehandler
 
     def start(self):
-        loop = asyncio.get_event_loop()
+        self.loop = asyncio.get_event_loop()
         try:
-            loop.run_until_complete(main_loop(self.client))
+            self.loop.run_until_complete(main_loop(self.client))
         finally:
             self.client.close()  # Prevent LmacRxBlk:1 errors        
-        '''
-        blocking_method=True
-        while True:
-            if blocking_method:
-                # Blocking wait for message
-                self.client.wait_msg()
-            else:
-                # Non-blocking wait for message
-                self.client.check_msg()
-                # Then need to sleep to avoid 100% CPU usage (in a real
-                # app other useful actions would be performed instead)
-                time.sleep(1)
-        '''
 
+    
 async def main_loop(client):
     await client.connect()
+    
     while True:
         await asyncio.sleep(5)
