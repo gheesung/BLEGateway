@@ -65,9 +65,7 @@ class MQTTHandler(ProtocolHandler):
 
         self.client = MQTTClient(config_mqtt)
 
-        #set to mqtt callback
-        #self.client.set_callback(self.received_cb)
-        #self.client.connect()
+        self.loop = asyncio.get_event_loop()
 
         topic = self.topicprefix  + 'cmnd/+/+'
         topic = topic.encode()
@@ -164,7 +162,7 @@ class MQTTHandler(ProtocolHandler):
         self.devicehandler = devicehandler
 
     def start(self):
-        self.loop = asyncio.get_event_loop()
+        
         try:
             self.loop.run_until_complete(main_loop(self.client))
         finally:

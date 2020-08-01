@@ -17,6 +17,13 @@ This script will only work with Micropython unstable build from 2020-06-10 onwar
 {
     "transport" : "mqtt",
     "hardware" : "m5stack_core",
+        "m5stack_core": {
+        "enable_ble" : true,
+        "enable_wifi" : true,
+        "wifi_ssid": "SSID",
+        "wifi_pw" : "PASSWORD",
+        "screensaver" : 30
+    },
     "mqtt" : {
         "wifi_ssid": "SSID",
         "wifi_pw" : "PASSWORD",
@@ -56,12 +63,8 @@ This gateway consists of 3 major components:
 "device" - This object specifies the sensor(s) or actuator(s) to operate on. e.g. Xiaomi Temperature and Humidity sensor. The sensor(s) or actuator(s) can be internal or external to the hardware. It is specified as "device" so that it can be controlled externally by other systems.
 
 
-
-
-
-
 # References
-https://github.com/fizista/micropython-umqtt.simple2
-https://github.com/RoButton/switchbotpy
-https://github.com/rdagger/micropython-ili9341
+* https://github.com/peterhinch/micropython-mqtt/tree/master/mqtt_as
+* https://github.com/RoButton/switchbotpy
+* https://github.com/rdagger/micropython-ili9341
 

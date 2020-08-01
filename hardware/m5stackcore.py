@@ -3,6 +3,9 @@ from machine import Pin, Timer
 #from hardware.button import Button
 from hardware.aswitch import Pushbutton as Button
 from hardware.dummy import DummyHardware
+import uasyncio as asyncio
+from uasyncio import Lock
+
 
 #screen components
 import sys
@@ -35,14 +38,6 @@ class Hardware(DummyHardware):
         self.buttonB.press_func(self.button_B_callback, (pin_b,))  # Note how function and args are passed
         self.buttonC.press_func(self.button_C_callback, (pin_c,))  # Note how function and args are passed
  
-        # buttons
-        #self.buttonA = Button(pin=Pin(BUTTON_A_PIN, mode=Pin.IN, pull=None),  
-        #    callback=self.button_A_callback, trigger=Pin.IRQ_FALLING)
-        #self.buttonB = Button(pin=Pin(BUTTON_B_PIN, mode=Pin.IN, pull=None),  
-        #    callback=self.button_B_callback, trigger=Pin.IRQ_FALLING)
-        #self.buttonC = Button(pin=Pin(BUTTON_C_PIN, mode=Pin.IN, pull=None),  
-        #    callback=self.button_C_callback, trigger=Pin.IRQ_FALLING)
-        
         # display
         self.display = None
         self.screen_power = None
@@ -52,6 +47,17 @@ class Hardware(DummyHardware):
 
         self.setup_screen()
 
+        # screen saver
+        # 0 - disable
+        # x - screen saver activation in second
+        self.screensaver = 0
+        self.currentcount  = 0
+        if "screensaver" in config:
+            self.screensaver = int(config["screensaver"])
+            self.currentcount = int(config["screensaver"])
+        
+        self.screen_timeout_lock = Lock()
+        
         # wifi
         super().__init__(config)
     
@@ -70,8 +76,9 @@ class Hardware(DummyHardware):
             #device = self.device_req_handler["studyrmfan"]
             # handle the request
             topic = self.tranport_handler.topicprefix + 'cmnd/studyrmfan/press'
-            await self.tranport_handler.publish(topic, 'on')
-       
+            self.tranport_handler.publish(topic, 'on')
+            # rest the screen saver
+            self.tranport_handler.loop.create_task(self.reset_screen_saver())         
             
     def button_B_callback(self, pin):
         print("Button (%s) changed to: %r" % (pin, pin.value()))
@@ -79,7 +86,9 @@ class Hardware(DummyHardware):
             
             # handle the request
             topic = self.tranport_handler.topicprefix + 'cmnd/studyrmtemp/getstatus'
-            await self.tranport_handler.publish(topic, 'on')
+            self.tranport_handler.publish(topic, 'on')
+            # rest the screen saver
+            self.tranport_handler.loop.create_task(self.reset_screen_saver())            
 
     def button_C_callback(self, pin):
         print("Button (%s) changed to: %r" % (pin, pin.value()))
@@ -88,8 +97,9 @@ class Hardware(DummyHardware):
             #device = self.device_req_handler["waterheater"]
             # handle the request
             topic = self.tranport_handler.topicprefix + 'cmnd/waterheater/press'
-            await self.tranport_handler.publish(topic, 'on')
-    
+            self.tranport_handler.publish(topic, 'on')
+            # rest the screen saver
+            self.tranport_handler.loop.create_task(self.reset_screen_saver())      
     def clear_dashboard(self):
         '''
         Clear the dashboard area
@@ -123,6 +133,9 @@ class Hardware(DummyHardware):
         self.display.draw_text(70, 80, 'Waiting For', self.large_label_font, color565(255, 255, 255), background=color565(0, 0, 0))
         self.display.draw_text(70, 100, 'Messages', self.large_label_font, color565(255, 255, 255), background=color565(0, 0, 0))
 
+        #activate the screen saver
+        self.tranport_handler.loop.create_task(self.screen_saver_countdown())
+
     def home_page(self):
         self.display.clear()
         self.display.draw_image('/images/blecanvas.raw',0,0,320,240)
@@ -131,12 +144,44 @@ class Hardware(DummyHardware):
         #self.display.draw_text(225, 203, 'Heater', self.large_label_font, color565(0, 0, 0), background=color565(255, 255, 255))
         self.screen_power.value(1)
 
+        
+
     def display_result(self, text):
         print("Display Result")
         self.clear_dashboard()
         self.display.draw_text(70, 80, text["line1"], self.large_label_font, color565(255, 255, 255))
         self.display.draw_text(70, 100, text["line2"], self.large_label_font, color565(255, 255, 255))
         self.display.draw_text(70, 120, text["line3"], self.large_label_font, color565(255, 255, 255))
+    
+    def screen_off(self):
+        self.screen_power.value(0)
+    
+    def screen_on(self):
+        self.screen_power.value(1)
+    
+    async def reset_screen_saver(self):
+        '''
+        Reset the screen Saver timeout to
+        
+        '''
+        await self.screen_timeout_lock.acquire()
+        self.currentcount = self.screensaver
+        self.screen_timeout_lock.release()
+        self.screen_on()
 
+    
+    async def screen_saver_countdown(self):
+        while True:
+            await self.screen_timeout_lock.acquire()
+            if self.currentcount > 0: 
+                self.currentcount -= 1 
+            if self.currentcount == 0 :
+                self.screen_off()
+            self.screen_timeout_lock.release()
+            await asyncio.sleep(1)
+    
+       
+    
+        
 #a=Hardware()
 #a.show_setupcomplete
