@@ -12,8 +12,9 @@ async def eliza(*_):  # e.g. via set_wifi_handler(coro): see test program
 
 class MQTTHandler(ProtocolHandler):
     def __init__(self, hardware, config):
+        
+        # Init the protocol handler objects
         super().__init__(hardware, config)
-
 
         self.server = config["mqtt_server"]
         self.port = config["mqtt_port"]
@@ -36,10 +37,7 @@ class MQTTHandler(ProtocolHandler):
         self.visual_indicator = None
         self.devicehandler = None       # the handle to all the devices
 
-        # setup mqtt
-        #self.client = MQTTClient(self.clientid, server=self.server, port=self.port,
-        #    user=self.userid, password=self.password)
-
+        # MQTT init parameters
         config_mqtt = {
             'client_id':     self.clientid,
             'server':        self.server,
@@ -61,11 +59,11 @@ class MQTTHandler(ProtocolHandler):
             'ssid':          self.wifi_ssid,
             'wifi_pw':       self.wifi_password,
         }
-
-
         self.client = MQTTClient(config_mqtt)
 
-        self.loop = asyncio.get_event_loop()
+        #self.loop = asyncio.get_event_loop()
+        # get the async loop from the hardware obj
+        self.loop = self.hardware.get_async_loop()
 
         topic = self.topicprefix  + 'cmnd/+/+'
         topic = topic.encode()
@@ -127,7 +125,8 @@ class MQTTHandler(ProtocolHandler):
         status = json.dumps(status)
         print ("Status of request", action, status)
             
-        #publish the status to the status queue
+        # Publish the status to the status queue
+        # A coroutine is created to publish the status back to the MQTT
         status_topic= self.topicprefix + "stat/" + devicename + "/" + action
         self.status_result = {
             "topic": status_topic.encode(),
@@ -161,16 +160,25 @@ class MQTTHandler(ProtocolHandler):
         '''
         self.devicehandler = devicehandler
 
-    def start(self):
+    '''def start(self):
         
         try:
             self.loop.run_until_complete(main_loop(self.client))
         finally:
             self.client.close()  # Prevent LmacRxBlk:1 errors        
-
-    
+    '''
+    async def start(self):
+        '''
+        The main loop for the MQTT coroutine
+        '''
+        await self.client.connect()
+        while True:
+            await asyncio.sleep(5)
+            
+'''
 async def main_loop(client):
     await client.connect()
     
     while True:
         await asyncio.sleep(5)
+'''

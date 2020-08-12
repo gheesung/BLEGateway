@@ -1,16 +1,20 @@
 import utime
-class DummyHardware():
-    '''
-    Dummy Device class
+import uasyncio as asyncio
 
-    This class performs the default actions when the derived class did not implement
-    the override method
+class BaseHardware():
+    '''
+    Base Hardware class
+
+    All hardware must be derived from this class. It handles the default actions.
+    Derived class can override the base class methods .
     '''
     
     def __init__(self, config) :
         self.config = config
         self.tranport_handler = None
         self.ble_handle = None
+
+        self.loop = asyncio.get_event_loop()
 
         # ble - activate BLE if required
         if self.config["enable_ble"] == True:
@@ -20,6 +24,9 @@ class DummyHardware():
     
     def get_ble_handle(self):
         return self.ble_handle
+    
+    def get_async_loop(self):
+        return self.loop
     
     def set_transport_handler(self, transport_handler):
         self.tranport_handler = transport_handler
@@ -38,3 +45,19 @@ class DummyHardware():
     
     def display_result(self, text):
         print("Display Result")
+    
+    def get_bat_voltage(self):
+        return 0
+    
+
+    # start the coroutine for the transport object e.g. MQTT
+    def start_transport(self):
+        self.loop.create_task(self.tranport_handler.start())
+        
+    # The start the main loop
+    def start(self):
+        self.loop.run_until_complete(main_loop())
+
+async def main_loop():
+    while True:
+        await asyncio.sleep(5)            

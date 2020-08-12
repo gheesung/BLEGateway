@@ -2,7 +2,7 @@ from micropython import const
 from machine import Pin, Timer
 #from hardware.button import Button
 from hardware.aswitch import Pushbutton as Button
-from hardware.dummy import DummyHardware
+from hardware.basehardware import BaseHardware
 import uasyncio as asyncio
 from uasyncio import Lock
 
@@ -23,7 +23,7 @@ BUTTON_A_PIN = const(39)
 BUTTON_B_PIN = const(38)
 BUTTON_C_PIN = const(37)
 
-class Hardware(DummyHardware):
+class Hardware(BaseHardware):
     
     def __init__(self, config) :
 

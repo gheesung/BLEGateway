@@ -8,8 +8,8 @@ import gc
 
 
 from machine import Pin, Timer, reset
-from hardware.button import Button
-BUTTON_A_PIN = const(39)
+from hardware.blescanner import BLEScanner
+
 class mqtt2bleGateway():
     """miio2mqttGateway
     
@@ -49,19 +49,23 @@ class mqtt2bleGateway():
             from hardware.ttgotcell import Hardware
         elif hardware == "m5stack_fire":
             from hardware.m5stackfire import Hardware
+        elif hardware == "ttgo_t_display":
+            from hardware.ttgotdisplay import Hardware
         print ("Hardware :", hardware)
         hardware_config = self.config[hardware]
         self.hardware = Hardware(hardware_config)
+        
+        #self.hardware.start()
 
         # setup the transport layeran
         if self.config["transport"] == "mqtt":
             mqttconfig = self.config["mqtt"]
             from transport.mqtthandler import MQTTHandler
             self.protocol_handler = MQTTHandler(self.hardware, mqttconfig)
-        elif self.config["transport"] == "blescanner":
-            from transport.blescanner import BLEScanner
-            blescanner_config = self.config["blescanner"]
-            self.protocol_handler = BLEScanner(self.hardware, blescanner_config)
+        #elif self.config["transport"] == "blescanner":
+        #    from transport.blescanner import BLEScanner
+        #    blescanner_config = self.config["blescanner"]
+        #    self.protocol_handler = BLEScanner(self.hardware, blescanner_config)
         # setup the devices
         devices = self.config["devices"]
         for device in devices:
@@ -87,6 +91,7 @@ class mqtt2bleGateway():
 
         # pass the transport and device handler to the hardware
         self.hardware.set_transport_handler(self.protocol_handler)
+        self.hardware.start_transport()
         
         for device in self.device_req_handler.items():
             #devicename = device['devicename']
@@ -95,10 +100,14 @@ class mqtt2bleGateway():
         # hardware device to indicate visually (if possible) when the setup is completed.
         #self.protocol_handler.set_visual_indicator(self.hardware.blink)
         self.hardware.show_setupcomplete()
-
+        
+        blescanner_config = self.config["blescanner"]
+        self.BLEScanner = BLEScanner(self.hardware, blescanner_config)
+        self.BLEScanner.start()
 
     def start(self) :
-        self.protocol_handler.start()
+        #self.protocol_handler.start()
+        self.hardware.start()
 
 
             

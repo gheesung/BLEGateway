@@ -308,6 +308,8 @@ class Device:
         #utime.sleep(1)
         if self.getSensorData() == 9:
             self.mitempdata["result"] = 9
+        self.mitempdata["vbatt"] = self.hardware.get_bat_voltage()
+        
         return self.mitempdata
 
     def handle_request(self, cmnd, action):

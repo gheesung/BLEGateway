@@ -1,48 +1,75 @@
+'''
+This class handles the TTGO T-Display
+
+Please note that the micropython needs to be recompiled to include the fast
+ST7789 drivers
+
+refer to https://github.com/russhughes/st7789_mpy
+'''
 from micropython import const
-from machine import Pin, Timer, ADC
+from machine import Pin, Timer, ADC, SPI
 #from hardware.button import Button
 from hardware.aswitch import Pushbutton as Button
 from hardware.basehardware import BaseHardware
-import utime
+from hardware.blescanner import BLEScanner
 
-BUTTON_A_PIN = const(39)
-BUTTON_B_PIN = const(36)
-BUTTON_C_PIN = const(34)
-BATT_PIN = const(35)
-LED = const(21)
+import st7789 
+import utime
+import vga1_8x16 as font
+BUTTON_A_PIN = const(35)
+#BUTTON_B_PIN = const(0)
+BATT_PIN = const(34)
+
+colormap = {
+    "PINK": st7789.color565(255, 128, 192),
+    "ORANGE" : st7789.color565(255,128,64),
+    "GREY" : st7789.color565(127, 127, 127),
+    "TURQUOISE" : st7789.color565(0, 128, 128),
+    "AZURE" : st7789.color565(0, 128, 255),
+    "OLIVE" : st7789.color565(128, 128, 0),
+    "PURPLE" : st7789.color565(128, 0, 128),
+    "WHITE" : st7789.color565(255, 255, 255)
+}
+#
+
 
 class Hardware(BaseHardware):
     
     def __init__(self, config) :
-
+        self.config = config
         # TTGO hardware specific
-        '''
-        self.buttonA = Button(pin=Pin(BUTTON_A_PIN, mode=Pin.IN, pull=None),  
-            callback=self.button_A_callback, trigger=Pin.IRQ_FALLING)
-        self.buttonB = Button(pin=Pin(BUTTON_B_PIN, mode=Pin.IN, pull=None),  
-            callback=self.button_C_callback, trigger=Pin.IRQ_FALLING)
-        self.buttonC = Button(pin=Pin(BUTTON_C_PIN, mode=Pin.IN, pull=None),  
-            callback=self.button_C_callback, trigger=Pin.IRQ_FALLING)
-        '''
+        self.tft = st7789.ST7789(
+            SPI(2, baudrate=30000000, polarity=1, phase=1, sck=Pin(18), mosi=Pin(19)),
+            135,
+            240,
+            reset=Pin(23, Pin.OUT),
+            cs=Pin(5, Pin.OUT),
+            dc=Pin(16, Pin.OUT),
+            backlight=Pin(4, Pin.OUT),
+            rotation=3)        
+        
+        self.tft.init()
+        self.tft.rotation(1)
+        self.tft.fill(0)
+        
         pin_a = Pin(BUTTON_A_PIN, mode=Pin.IN, pull=None)
-        pin_b = Pin(BUTTON_B_PIN, mode=Pin.IN, pull=None)
-        pin_c = Pin(BUTTON_C_PIN, mode=Pin.IN, pull=None)
+        #pin_b = Pin(BUTTON_B_PIN, mode=Pin.IN, pull=None)
         
         self.buttonA = Button(pin=pin_a)
-        self.buttonB = Button(pin=pin_b)
-        self.buttonC = Button(pin=pin_c)
-        self.buttonA.press_func(self.button_A_callback, (pin_a,))  # Note how function and args are passed
-        self.buttonB.press_func(self.button_B_callback, (pin_b,))  # Note how function and args are passed
-        self.buttonC.press_func(self.button_C_callback, (pin_c,))  # Note how function and args are passed
         
-        self.led = Pin(LED, mode=Pin.OUT)
-
+        self.buttonA.press_func(self.button_A_callback, (pin_a,))  # Note how function and args are passed
+        
+        
         #configure the battery reading
         self.vbat = ADC(Pin(BATT_PIN))
         self.vbat.atten(ADC.ATTN_0DB)
         self.vbat.width(ADC.WIDTH_12BIT)
 
         self.tranport_handler = None
+        
+        # Turn off backlit
+        self.screen_power = Pin(4, Pin.OUT)
+        
         super().__init__(config)
     
     def get_bat_voltage(self):
@@ -55,29 +82,28 @@ class Hardware(BaseHardware):
         volt = round(volt,2) 
         return volt
 
-    def set_pin_callback(self, button, cb):
-        '''
-        call this to override the PIN callback function
-        '''
-        if button == BUTTON_A_PIN:
-            self.buttonA = Button(pin=Pin(BUTTON_A_PIN, mode=Pin.IN, pull=None),  
-                callback=cb, trigger=Pin.IRQ_FALLING)
-
     def set_transport_handler(self, transport_handler):
         self.tranport_handler = transport_handler
     
     def blink(self, totalblink=5):
         count=0
         while count < totalblink:
-            self.led.value(1)
-            utime.sleep(0.1)
-            self.led.value(0)
-            utime.sleep(0.1)
             count +=1
         
     def show_setupcomplete(self):
         self.blink(10)
+
+    def display_result(self, text):
+        print("Display Result")
+        self.tft.fill(0)
         
+        self.tft.text( font, text["line1"], 0, 0, st7789.color565(255,255,255), st7789.color565(0,0,0))
+        self.tft.text( font, text["line2"], 0, 20, st7789.color565(255,255,255), st7789.color565(0,0,0))
+        self.tft.text( font, text["line3"], 0, 40, st7789.color565(255,255,255), st7789.color565(0,0,0))
+        
+        color = colormap[text["code"]]
+        self.tft.fill_rect(180,80,50,50, color)
+
     def button_A_callback(self, pin):
         print("Button A (%s) changed to: %r" % (pin, pin.value()))
         if pin.value() == 0 :
@@ -96,12 +122,8 @@ class Hardware(BaseHardware):
             topic = self.tranport_handler.topicprefix + 'cmnd/studyrmtemp/getstatus'
             self.tranport_handler.publish(topic, 'on')           
 
-    def button_C_callback(self, pin):
-        print("Button C (%s) changed to: %r" % (pin, pin.value()))
-        if pin.value() == 0 :
-            bat_level = self.get_bat_voltage()            
-            #device = self.device_req_handler["waterheater"]
-            # handle the request
-            topic = self.tranport_handler.topicprefix + 'cmnd/waterheater/press'
-            self.tranport_handler.publish(topic, 'on')
+    def screen_off(self):
+        self.screen_power.value(0)
     
+    def screen_on(self):
+        self.screen_power.value(1)
